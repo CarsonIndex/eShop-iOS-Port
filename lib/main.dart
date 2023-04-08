@@ -4,47 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-Future<Item> fetchItem() async {
-  final response = await http
-      .get(Uri.parse('http://api.arianb.me:8000/WholeCart'));
-
-  if (response.statusCode == 200) {
-    // If the server did return a 200 OK response,
-    // then parse the JSON.
-    return Item.fromJson(jsonDecode(response.body));
-  } else {
-    // If the server did not return a 200 OK response,
-    // then throw an exception.
-    throw Exception('Failed to load album');
-  }
-}
-
-class Item {
-  final String upc;
-  final String name;
-  final String image;
-  final String link;
-  final int average_rating;
-
-  const Item({
-    required this.upc,
-    required this.name,
-    required this.image,
-    required this.link,
-    required this.average_rating
-  });
-
-  factory Item.fromJson(Map<String, dynamic> json) {
-    return Item(
-      upc: json['userId'],
-      name: json['id'],
-      image: json['title'],
-      link: json['link'],
-      average_rating: json['rating']
-    );
-  }
-}
-
 void main() {
   runApp(const MaterialApp(
     home: MyApp() ,
@@ -52,9 +11,14 @@ void main() {
   );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     Widget shoppingButton = Row(
@@ -139,8 +103,21 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class ShoppingCart extends StatelessWidget {
+class ShoppingCart extends StatefulWidget {
   const ShoppingCart({super.key});
+
+  @override
+  State<ShoppingCart> createState() => _ShoppingCartState();
+}
+
+class _ShoppingCartState extends State<ShoppingCart> {
+  late Future<List<Item>>? _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = fetchItems();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,14 +125,66 @@ class ShoppingCart extends StatelessWidget {
       appBar: AppBar(
         title: const Text('ShoppingCart'),
       ),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          child: const Text('Go back!'),
-        ),
+      body: FutureBuilder<List<Item>>(
+        future: _items,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            final items = snapshot.data!;
+            return ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return ListTile(
+                  leading: Image.network(item.image),
+                  title: Text(item.name),
+                  subtitle: Text('UPC: ${item.upc}'),
+                  trailing: Text('Average Rating: ${item.average_rating}'),
+                );
+              },
+            );
+          } else if (snapshot.hasError) {
+            return const Text('Error loading items from API');
+          } else {
+            return const CircularProgressIndicator();
+          }
+        },
       ),
+    );
+  }
+}
+
+
+Future<List<Item>> fetchItems() async {
+  final response = await http.get(Uri.parse('http://api.arianb.me:8000/WholeCart'));
+
+  if (response.statusCode == 200) {
+    final List<dynamic> jsonResponse = jsonDecode(response.body);
+    return jsonResponse.map((item) => Item.fromJson(item)).toList();
+  } else {
+    throw Exception('Failed to load items from API');
+  }
+}
+
+
+class Item {
+  final String upc;
+  final String name;
+  final String image;
+  final int average_rating;
+
+  const Item({
+    required this.upc,
+    required this.name,
+    required this.image,
+    required this.average_rating
+  });
+
+  factory Item.fromJson(Map<String, dynamic> json) {
+    return Item(
+        upc: json['upc'] as String,
+        name: json['name'] as String,
+        image: json['image'] as String,
+        average_rating: json['average_rating'] as int,
     );
   }
 }
